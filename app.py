@@ -408,25 +408,28 @@ def main():
 
         with col2:
             # Export results as CSV
-            export_data = []
-            for i, candidate in enumerate(top_candidates, 1):
-                summary = generate_candidate_summary(
-                    job_description,
-                    candidate['resume_text'],
-                    candidate['similarity']
-                ) if show_summaries else "N/A"
+            if top_candidates:
+                export_data = []
+                for i, candidate in enumerate(top_candidates, 1):
+                    # Get summary if enabled (but don't regenerate if already exists)
+                    summary = "N/A"
+                    if show_summaries:
+                        summary = generate_candidate_summary(
+                            job_description,
+                            candidate['resume_text'],
+                            candidate['similarity']
+                        ).replace('\n', ' ')  # Remove line breaks for CSV
 
-                export_data.append({
-                    'Rank': i,
-                    'Name': candidate['name'],
-                    'Filename': candidate['filename'],
-                    'Raw_Similarity': f"{candidate['similarity']:.3f}",
-                    'Normalized_Score': f"{candidate['normalized_score']:.3f}",
-                    'Match_Percentage': f"{candidate['similarity'] * 100:.1f}%",
-                    'Assessment': summary.replace('\n', ' ')  # Remove line breaks for CSV
-                })
+                    export_data.append({
+                        'Rank': i,
+                        'Name': candidate['name'],
+                        'Filename': candidate['filename'],
+                        'Raw_Similarity': f"{candidate['similarity']:.3f}",
+                        'Normalized_Score': f"{candidate['normalized_score']:.3f}",
+                        'Match_Percentage': f"{candidate['similarity'] * 100:.1f}%",
+                        'Assessment': summary
+                    })
 
-            if export_data:
                 df = pd.DataFrame(export_data)
                 csv = df.to_csv(index=False)
                 st.download_button(
@@ -434,7 +437,8 @@ def main():
                     data=csv,
                     file_name=f"candidate_matches_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime='text/csv',
-                    help="Download candidate matching results as CSV file"
+                    help="Download candidate matching results as CSV file",
+                    key="download_csv"  # Add key to prevent state issues
                 )
 
 
