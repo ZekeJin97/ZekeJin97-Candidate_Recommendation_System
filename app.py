@@ -128,6 +128,7 @@ def extract_text_from_file(file):
         return ""
 
 
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_embedding(text: str) -> List[float]:
     """Get embedding for text using OpenAI API"""
     try:
@@ -194,33 +195,34 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
     """Generate AI summary of why candidate is a good fit"""
 
     prompt = f"""
-    You are a hiring manager reviewing a candidate. Analyze their experience objectively.
+    You are a hiring manager reviewing a candidate. Read their resume VERY CAREFULLY.
 
-    INSTRUCTIONS:
-    - For strong matches: Mention 1-2 specific projects/achievements that align with requirements
-    - For weak matches: Acknowledge relevant skills BUT mention key gaps or limitations
-    - Start with strengths, then mention "however" or "but lacks" for significant gaps
-    - Don't assume they fit - be honest about mismatches
-    - Keep between 60-80 words for detailed assessment
+    CRITICAL RULES:
+    1. ONLY mention what is explicitly written in their resume
+    2. If they list "LangChain" in skills, they HAVE LangChain experience  
+    3. If they list "OpenAI API" in skills, they HAVE OpenAI experience
+    4. Do NOT contradict what's written in their resume
+    5. Focus on actual projects and achievements mentioned
+    6. For gaps, only mention what's truly missing from the resume
 
     JOB REQUIREMENTS:
     {job_description}
 
-    CANDIDATE RESUME:
+    CANDIDATE'S RESUME (read every word carefully):
     {resume_text}
 
-    CANDIDATE ASSESSMENT:"""
+    ACCURATE ASSESSMENT (based only on what's actually written):"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
-                 "content": "You are an honest hiring manager. For strong candidates, highlight relevant experience. For weaker candidates, acknowledge skills but clearly mention gaps using 'however' or 'but lacks'."},
+                 "content": "You are a precise hiring manager who reads resumes word-for-word. Never contradict what's explicitly listed in the candidate's skills or experience. If LangChain is listed, they have LangChain experience. Be factually accurate."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=200,  # Increased for longer responses
-            temperature=0.2
+            max_tokens=200,
+            temperature=0.0  # Zero temperature for maximum consistency
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -281,11 +283,16 @@ def main():
             "Choose resume files",
             accept_multiple_files=True,
             type=['pdf', 'docx', 'txt'],
-            help="Upload PDF (text or image-based), DOCX, or TXT files. OCR will handle scanned/image PDFs if available."
+            help="Upload PDF (text or image-based), DOCX, or TXT files. OCR will handle scanned/image PDFs if available.",
+            key="resume_uploader"
         )
 
         if uploaded_files:
             st.success(f"Uploaded {len(uploaded_files)} resume(s)")
+            # Show file details in a more compact way
+            with st.expander(f"📁 View uploaded files ({len(uploaded_files)})", expanded=False):
+                for i, file in enumerate(uploaded_files, 1):
+                    st.text(f"{i}. {file.name} ({file.size / 1024:.1f}KB)")
 
     # Process button
     if st.button("🚀 Find Best Candidates", type="primary"):
@@ -393,8 +400,42 @@ def main():
 
         # Summary statistics
         st.header("📊 Summary")
-        avg_score = np.mean([c['similarity'] for c in top_candidates])
-        st.metric("Average Similarity Score", f"{avg_score:.3f}")
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            avg_score = np.mean([c['similarity'] for c in top_candidates])
+            st.metric("Average Similarity Score", f"{avg_score:.3f}")
+
+        with col2:
+            # Export results as CSV
+            export_data = []
+            for i, candidate in enumerate(top_candidates, 1):
+                summary = generate_candidate_summary(
+                    job_description,
+                    candidate['resume_text'],
+                    candidate['similarity']
+                ) if show_summaries else "N/A"
+
+                export_data.append({
+                    'Rank': i,
+                    'Name': candidate['name'],
+                    'Filename': candidate['filename'],
+                    'Raw_Similarity': f"{candidate['similarity']:.3f}",
+                    'Normalized_Score': f"{candidate['normalized_score']:.3f}",
+                    'Match_Percentage': f"{candidate['similarity'] * 100:.1f}%",
+                    'Assessment': summary.replace('\n', ' ')  # Remove line breaks for CSV
+                })
+
+            if export_data:
+                df = pd.DataFrame(export_data)
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Results CSV",
+                    data=csv,
+                    file_name=f"candidate_matches_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime='text/csv',
+                    help="Download candidate matching results as CSV file"
+                )
 
 
 if __name__ == "__main__":
