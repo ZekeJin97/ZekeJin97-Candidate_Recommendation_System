@@ -7,9 +7,6 @@ import io
 import PyPDF2
 from docx import Document
 import re
-import pytesseract
-from PIL import Image
-from pdf2image import convert_from_bytes
 
 # Set page config
 st.set_page_config(
@@ -28,25 +25,6 @@ def get_openai_client():
 
 
 client = get_openai_client()
-
-
-def extract_text_with_ocr(file_bytes):
-    """Extract text from image-based PDF using OCR"""
-    try:
-        # Convert PDF pages to images
-        images = convert_from_bytes(file_bytes)
-        text = ""
-
-        with st.spinner(f"Processing image-based PDF with OCR... ({len(images)} pages)"):
-            for i, image in enumerate(images):
-                # Use OCR to extract text from each page
-                page_text = pytesseract.image_to_string(image, config='--psm 6')
-                text += f"Page {i + 1}:\n{page_text}\n\n"
-
-        return text.strip()
-    except Exception as e:
-        st.error(f"OCR processing failed: {str(e)}")
-        return ""
 
 
 def extract_text_from_pdf(file):
@@ -72,14 +50,10 @@ def extract_text_from_pdf(file):
         if word_count >= 10:  # If we have at least 10 words, assume it's readable
             return clean_text
 
-        # If text extraction failed or gave minimal results, try OCR
-        st.info("📄 PDF appears to be image-based or scanned. Using OCR to extract text...")
-        ocr_text = extract_text_with_ocr(file_bytes)
-
-        if len(ocr_text.strip()) < 50:
-            st.warning("⚠️ OCR extraction yielded minimal text. Please check if the PDF is readable.")
-
-        return ocr_text
+        # If text extraction failed, show helpful message
+        st.warning(
+            f"⚠️ {file.name} appears to be image-based or scanned. For this demo, please use text-searchable PDFs or convert to .txt/.docx format.")
+        return ""
 
     except Exception as e:
         st.error(f"Error processing PDF {file.name}: {str(e)}")
@@ -176,42 +150,34 @@ def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
 def generate_candidate_summary(job_description: str, resume_text: str, similarity_score: float) -> str:
     """Generate AI summary of why candidate is a good fit"""
 
-    # Extract key technologies and skills from both job and resume
-    job_keywords = ["langchain", "rag", "openai", "claude", "agent", "pytorch", "tensorflow", "react", "python", "aws"]
-    resume_lower = resume_text.lower()
-
-    found_keywords = [kw for kw in job_keywords if kw in resume_lower]
-
     prompt = f"""
-    You are a hiring manager reviewing a candidate. Analyze the FULL resume content carefully.
+    You are a hiring manager reviewing a candidate. Read the candidate's resume CAREFULLY and provide an honest assessment.
 
-    INSTRUCTIONS:
-    - Start directly with the strongest specific matches
-    - Mention actual project names, technologies, or achievements from the resume
-    - Don't contradict yourself - if they have LangChain experience, acknowledge it
-    - Keep under 40 words
-    - Be specific and accurate
+    CRITICAL INSTRUCTIONS:
+    - ONLY mention skills/technologies that are explicitly listed in the candidate's resume
+    - DO NOT assume or invent experience the candidate doesn't have
+    - If the candidate lacks key requirements, be honest about it
+    - Focus on what they DO have that's relevant
+    - Keep under 50 words
 
-    KEY REQUIREMENTS: 
+    JOB REQUIREMENTS:
     {job_description}
 
-    CANDIDATE'S FULL BACKGROUND:
+    CANDIDATE'S ACTUAL RESUME:
     {resume_text}
 
-    DETECTED RELEVANT SKILLS: {', '.join(found_keywords)}
-
-    SPECIFIC ASSESSMENT:"""
+    HONEST ASSESSMENT (what they actually have):"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
-                 "content": "You are a precise hiring manager who reads carefully and gives accurate assessments based on actual resume content."},
+                 "content": "You are an honest hiring manager who only mentions skills that are explicitly stated in the resume. Never invent or assume experience."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=100,
-            temperature=0.1  # Lower temperature for more consistent responses
+            max_tokens=80,
+            temperature=0.0  # Zero temperature for consistency
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -272,7 +238,7 @@ def main():
             "Choose resume files",
             accept_multiple_files=True,
             type=['pdf', 'docx', 'txt'],
-            help="Upload PDF (text or image-based), DOCX, or TXT files. OCR will automatically handle scanned/image PDFs."
+            help="Upload PDF (text-searchable), DOCX, or TXT files. Note: Scanned/image PDFs should be converted to text format for best results."
         )
 
         if uploaded_files:
