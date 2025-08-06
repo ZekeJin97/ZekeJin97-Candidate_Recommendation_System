@@ -267,8 +267,6 @@ def main():
         st.session_state.candidates_processed = False
     if 'top_candidates' not in st.session_state:
         st.session_state.top_candidates = []
-    if 'job_description' not in st.session_state:
-        st.session_state.job_description = ""
 
     # Sidebar for configuration
     st.sidebar.header("Configuration")
@@ -283,13 +281,8 @@ def main():
         job_description = st.text_area(
             "Enter the job description:",
             height=200,
-            placeholder="e.g., We are looking for a Machine Learning Engineer with experience in Python, deep learning frameworks like PyTorch/TensorFlow...",
-            value=st.session_state.job_description
+            placeholder="e.g., We are looking for a Machine Learning Engineer with experience in Python, deep learning frameworks like PyTorch/TensorFlow..."
         )
-        # Update session state
-        if job_description != st.session_state.job_description:
-            st.session_state.job_description = job_description
-            st.session_state.candidates_processed = False  # Reset if job description changes
 
     with col2:
         st.header("Upload Candidate Resumes")
