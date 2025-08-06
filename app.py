@@ -199,9 +199,10 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
 
     STRICT RULES:
     - DO NOT mention degrees, universities, education, or academic background
+    - DO NOT start with "Strong match:" or "Weak match:" - just give direct assessment
     - Focus ONLY on work experience, projects, and technical skills
-    - For strong matches: Mention 1-2 specific work projects that align
-    - For weak matches: Acknowledge relevant skills BUT mention key gaps
+    - For strong candidates: Mention specific work projects that align
+    - For weaker candidates: Mention what they DO have, then add "However, lacks..." for gaps
     - Keep response concise: 35-50 words maximum
     - Skip all educational details completely
 
@@ -211,18 +212,18 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
     CANDIDATE RESUME:
     {resume_text}
 
-    WORK-FOCUSED ASSESSMENT (no education mentioned):"""
+    DIRECT ASSESSMENT (no "strong/weak match" labels):"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
-                 "content": "You are a hiring manager who NEVER mentions education, degrees, or universities. Focus only on work experience, projects, and technical skills. Be concise."},
+                 "content": "You are a hiring manager who NEVER mentions education, degrees, or universities. Give direct assessments without 'strong match' or 'weak match' labels. Be concise and focus on work experience."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=100,  # Reduced from 200
-            temperature=0.2  # Changed from 0.0
+            max_tokens=100,
+            temperature=0.2
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -261,6 +262,14 @@ def main():
     st.title("🎯 Candidate Recommendation Engine")
     st.markdown("*Find the best candidates for your job opening*")
 
+    # Initialize session state to persist results
+    if 'candidates_processed' not in st.session_state:
+        st.session_state.candidates_processed = False
+    if 'top_candidates' not in st.session_state:
+        st.session_state.top_candidates = []
+    if 'job_description' not in st.session_state:
+        st.session_state.job_description = ""
+
     # Sidebar for configuration
     st.sidebar.header("Configuration")
     num_candidates = st.sidebar.slider("Number of top candidates to show", 5, 10, 10)
@@ -274,8 +283,13 @@ def main():
         job_description = st.text_area(
             "Enter the job description:",
             height=200,
-            placeholder="e.g., We are looking for a Machine Learning Engineer with experience in Python, deep learning frameworks like PyTorch/TensorFlow..."
+            placeholder="e.g., We are looking for a Machine Learning Engineer with experience in Python, deep learning frameworks like PyTorch/TensorFlow...",
+            value=st.session_state.job_description
         )
+        # Update session state
+        if job_description != st.session_state.job_description:
+            st.session_state.job_description = job_description
+            st.session_state.candidates_processed = False  # Reset if job description changes
 
     with col2:
         st.header("Upload Candidate Resumes")
@@ -365,9 +379,6 @@ def main():
         for i, candidate in enumerate(top_candidates):
             candidate['normalized_score'] = normalized_scores[i]
 
-        # Display results
-        st.header("🏆 Top Candidate Matches")
-
         # Pre-generate all summaries if enabled to avoid state issues
         if show_summaries:
             with st.spinner("Generating AI summaries..."):
@@ -377,6 +388,17 @@ def main():
                         candidate['resume_text'],
                         candidate['similarity']
                     )
+
+        # Store results in session state
+        st.session_state.top_candidates = top_candidates
+        st.session_state.candidates_processed = True
+
+    # Display results from session state (persists across interactions)
+    if st.session_state.candidates_processed and st.session_state.top_candidates:
+        top_candidates = st.session_state.top_candidates[:num_candidates]  # Apply current slider setting
+
+        # Display results
+        st.header("🏆 Top Candidate Matches")
 
         for i, candidate in enumerate(top_candidates, 1):
             match_quality = get_match_quality(candidate['similarity'], candidate['normalized_score'])
