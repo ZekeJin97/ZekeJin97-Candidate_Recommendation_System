@@ -129,19 +129,22 @@ def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
 def generate_candidate_summary(job_description: str, resume_text: str, similarity_score: float) -> str:
     """Generate AI summary of why candidate is a good fit"""
     prompt = f"""
-    Based on the job description and candidate's resume, explain in 2-3 sentences why this candidate is a good fit for this role.
-    Focus on specific skills, experience, or qualifications that align.
+    You are a hiring manager reviewing a candidate. Write a brief, specific assessment focusing on the MOST RELEVANT matches between this candidate and the job requirements.
 
-    Job Description:
-    {job_description[:1000]}...
+    INSTRUCTIONS:
+    - Start directly with the strongest match (no "Based on..." filler)
+    - Mention 2-3 SPECIFIC skills/experiences that align
+    - Include one potential concern or area for growth if similarity < 0.6
+    - Keep it under 50 words
+    - Sound natural and conversational
 
-    Candidate Resume:
-    {resume_text[:1000]}...
+    JOB REQUIREMENTS:
+    {job_description[:800]}
 
-    Similarity Score: {similarity_score:.3f}
+    CANDIDATE BACKGROUND:
+    {resume_text[:800]}
 
-    Summary:
-    """
+    ASSESSMENT:"""
 
     try:
         response = client.chat.completions.create(
