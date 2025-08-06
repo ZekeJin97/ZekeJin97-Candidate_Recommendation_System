@@ -7,6 +7,9 @@ import io
 import PyPDF2
 from docx import Document
 import re
+import pytesseract
+from PIL import Image
+from pdf2image import convert_from_bytes
 
 # Set page config
 st.set_page_config(
@@ -27,15 +30,59 @@ def get_openai_client():
 client = get_openai_client()
 
 
-def extract_text_from_pdf(file):
-    """Extract text from uploaded PDF file"""
+def extract_text_with_ocr(file_bytes):
+    """Extract text from image-based PDF using OCR"""
     try:
+        # Convert PDF pages to images
+        images = convert_from_bytes(file_bytes)
+        text = ""
+
+        with st.spinner(f"Processing image-based PDF with OCR... ({len(images)} pages)"):
+            for i, image in enumerate(images):
+                # Use OCR to extract text from each page
+                page_text = pytesseract.image_to_string(image, config='--psm 6')
+                text += f"Page {i + 1}:\n{page_text}\n\n"
+
+        return text.strip()
+    except Exception as e:
+        st.error(f"OCR processing failed: {str(e)}")
+        return ""
+
+
+def extract_text_from_pdf(file):
+    """Extract text from PDF (handles both text-based and image-based PDFs)"""
+    try:
+        # Read file bytes
+        file.seek(0)
+        file_bytes = file.read()
+
+        # First try regular text extraction
+        file.seek(0)
         pdf_reader = PyPDF2.PdfReader(file)
         text = ""
+
         for page in pdf_reader.pages:
-            text += page.extract_text() + "\n"
-        return text.strip()
-    except:
+            page_text = page.extract_text()
+            text += page_text + "\n"
+
+        # Check if we got meaningful text (not just whitespace/garbled)
+        clean_text = text.strip()
+        word_count = len(clean_text.split())
+
+        if word_count >= 10:  # If we have at least 10 words, assume it's readable
+            return clean_text
+
+        # If text extraction failed or gave minimal results, try OCR
+        st.info("📄 PDF appears to be image-based or scanned. Using OCR to extract text...")
+        ocr_text = extract_text_with_ocr(file_bytes)
+
+        if len(ocr_text.strip()) < 50:
+            st.warning("⚠️ OCR extraction yielded minimal text. Please check if the PDF is readable.")
+
+        return ocr_text
+
+    except Exception as e:
+        st.error(f"Error processing PDF {file.name}: {str(e)}")
         return ""
 
 
@@ -128,34 +175,43 @@ def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
 
 def generate_candidate_summary(job_description: str, resume_text: str, similarity_score: float) -> str:
     """Generate AI summary of why candidate is a good fit"""
+
+    # Extract key technologies and skills from both job and resume
+    job_keywords = ["langchain", "rag", "openai", "claude", "agent", "pytorch", "tensorflow", "react", "python", "aws"]
+    resume_lower = resume_text.lower()
+
+    found_keywords = [kw for kw in job_keywords if kw in resume_lower]
+
     prompt = f"""
-    You are a hiring manager reviewing a candidate. Write a brief, specific assessment focusing on the MOST RELEVANT matches between this candidate and the job requirements.
+    You are a hiring manager reviewing a candidate. Analyze the FULL resume content carefully.
 
     INSTRUCTIONS:
-    - Start directly with the strongest match (no "Based on..." filler)
-    - Mention 2-3 SPECIFIC skills/experiences that align
-    - Include one potential concern or area for growth if similarity < 0.6
-    - Keep it under 50 words
-    - Sound natural and conversational
+    - Start directly with the strongest specific matches
+    - Mention actual project names, technologies, or achievements from the resume
+    - Don't contradict yourself - if they have LangChain experience, acknowledge it
+    - Keep under 40 words
+    - Be specific and accurate
 
-    JOB REQUIREMENTS:
-    {job_description[:800]}
+    KEY REQUIREMENTS: 
+    {job_description}
 
-    CANDIDATE BACKGROUND:
-    {resume_text[:800]}
+    CANDIDATE'S FULL BACKGROUND:
+    {resume_text}
 
-    ASSESSMENT:"""
+    DETECTED RELEVANT SKILLS: {', '.join(found_keywords)}
+
+    SPECIFIC ASSESSMENT:"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
-                 "content": "You are a helpful HR assistant that explains why candidates match job requirements."},
+                 "content": "You are a precise hiring manager who reads carefully and gives accurate assessments based on actual resume content."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=150,
-            temperature=0.3
+            max_tokens=100,
+            temperature=0.1  # Lower temperature for more consistent responses
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -216,7 +272,7 @@ def main():
             "Choose resume files",
             accept_multiple_files=True,
             type=['pdf', 'docx', 'txt'],
-            help="Upload PDF, DOCX, or TXT files"
+            help="Upload PDF (text or image-based), DOCX, or TXT files. OCR will automatically handle scanned/image PDFs."
         )
 
         if uploaded_files:
