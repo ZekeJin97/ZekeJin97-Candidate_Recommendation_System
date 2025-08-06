@@ -1,6 +1,4 @@
-def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float: import streamlit as st
-
-
+import streamlit as st
 import openai
 import numpy as np
 import pandas as pd
@@ -111,6 +109,9 @@ def get_match_quality(raw_score: float, normalized_score: float) -> str:
         return "🟠 Moderate Match"
     else:
         return "🔴 Weak Match"
+
+
+def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
     """Calculate cosine similarity between two vectors"""
     vec1 = np.array(vec1)
     vec2 = np.array(vec2)
