@@ -8,6 +8,17 @@ import PyPDF2
 from docx import Document
 import re
 
+# Try to import OCR dependencies
+try:
+    import pytesseract
+    from PIL import Image
+    from pdf2image import convert_from_bytes
+
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    st.warning("⚠️ OCR dependencies not available. Image-based PDFs cannot be processed.")
+
 # Set page config
 st.set_page_config(
     page_title="Candidate Recommendation Engine",
@@ -25,6 +36,29 @@ def get_openai_client():
 
 
 client = get_openai_client()
+
+
+def extract_text_with_ocr(file_bytes):
+    """Extract text from image-based PDF using OCR"""
+    if not OCR_AVAILABLE:
+        st.error("OCR not available in this deployment. Please use text-searchable PDFs.")
+        return ""
+
+    try:
+        # Convert PDF pages to images
+        images = convert_from_bytes(file_bytes)
+        text = ""
+
+        with st.spinner(f"Processing image-based PDF with OCR... ({len(images)} pages)"):
+            for i, image in enumerate(images):
+                # Use OCR to extract text from each page
+                page_text = pytesseract.image_to_string(image, config='--psm 6')
+                text += f"Page {i + 1}:\n{page_text}\n\n"
+
+        return text.strip()
+    except Exception as e:
+        st.error(f"OCR processing failed: {str(e)}")
+        return ""
 
 
 def extract_text_from_pdf(file):
@@ -50,10 +84,19 @@ def extract_text_from_pdf(file):
         if word_count >= 10:  # If we have at least 10 words, assume it's readable
             return clean_text
 
-        # If text extraction failed, show helpful message
-        st.warning(
-            f"⚠️ {file.name} appears to be image-based or scanned. For this demo, please use text-searchable PDFs or convert to .txt/.docx format.")
-        return ""
+        # If text extraction failed, try OCR if available
+        if OCR_AVAILABLE:
+            st.info("📄 PDF appears to be image-based or scanned. Using OCR to extract text...")
+            ocr_text = extract_text_with_ocr(file_bytes)
+
+            if len(ocr_text.strip()) < 50:
+                st.warning("⚠️ OCR extraction yielded minimal text. Please check if the PDF is readable.")
+
+            return ocr_text
+        else:
+            st.warning(
+                f"⚠️ {file.name} appears to be image-based or scanned. OCR not available - please use text-searchable PDFs.")
+            return ""
 
     except Exception as e:
         st.error(f"Error processing PDF {file.name}: {str(e)}")
@@ -151,33 +194,33 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
     """Generate AI summary of why candidate is a good fit"""
 
     prompt = f"""
-    You are a hiring manager reviewing a candidate. Read the candidate's resume CAREFULLY and provide an honest assessment.
+    You are a hiring manager reviewing a candidate. Analyze their experience and explain WHY they fit this role.
 
-    CRITICAL INSTRUCTIONS:
-    - ONLY mention skills/technologies that are explicitly listed in the candidate's resume
-    - DO NOT assume or invent experience the candidate doesn't have
-    - If the candidate lacks key requirements, be honest about it
-    - Focus on what they DO have that's relevant
-    - Keep under 50 words
+    INSTRUCTIONS:
+    - Mention 1-2 SPECIFIC projects or achievements that align with job requirements
+    - Explain HOW their experience translates to this role
+    - Be honest about gaps if similarity is low
+    - Focus on relevance, not just technology lists
+    - Keep under 40 words
 
     JOB REQUIREMENTS:
     {job_description}
 
-    CANDIDATE'S ACTUAL RESUME:
+    CANDIDATE RESUME:
     {resume_text}
 
-    HONEST ASSESSMENT (what they actually have):"""
+    EXPLAIN THE FIT (focus on projects/impact, not just tech lists):"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
-                 "content": "You are an honest hiring manager who only mentions skills that are explicitly stated in the resume. Never invent or assume experience."},
+                 "content": "You are a hiring manager who focuses on relevant experience and project impact, not just technology lists. Explain WHY someone fits based on what they've actually built or accomplished."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=80,
-            temperature=0.0  # Zero temperature for consistency
+            max_tokens=120,
+            temperature=0.2
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -238,7 +281,7 @@ def main():
             "Choose resume files",
             accept_multiple_files=True,
             type=['pdf', 'docx', 'txt'],
-            help="Upload PDF (text-searchable), DOCX, or TXT files. Note: Scanned/image PDFs should be converted to text format for best results."
+            help="Upload PDF (text or image-based), DOCX, or TXT files. OCR will handle scanned/image PDFs if available."
         )
 
         if uploaded_files:
