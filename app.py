@@ -1,4 +1,6 @@
-import streamlit as st
+def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float: import streamlit as st
+
+
 import openai
 import numpy as np
 import pandas as pd
@@ -77,7 +79,38 @@ def get_embedding(text: str) -> List[float]:
         return []
 
 
-def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
+def normalize_similarity_score(similarity_scores: List[float]) -> List[float]:
+    """Normalize similarity scores to make them more interpretable"""
+    if not similarity_scores:
+        return []
+
+    min_score = min(similarity_scores)
+    max_score = max(similarity_scores)
+
+    # Avoid division by zero
+    if max_score == min_score:
+        return [0.5] * len(similarity_scores)
+
+    # Normalize to 0-1 range, then scale to 0.3-1.0 for better presentation
+    normalized = []
+    for score in similarity_scores:
+        norm_score = (score - min_score) / (max_score - min_score)
+        scaled_score = 0.3 + (norm_score * 0.7)  # Scale to 0.3-1.0 range
+        normalized.append(scaled_score)
+
+    return normalized
+
+
+def get_match_quality(raw_score: float, normalized_score: float) -> str:
+    """Get match quality description"""
+    if normalized_score >= 0.8:
+        return "🟢 Excellent Match"
+    elif normalized_score >= 0.6:
+        return "🟡 Good Match"
+    elif normalized_score >= 0.4:
+        return "🟠 Moderate Match"
+    else:
+        return "🔴 Weak Match"
     """Calculate cosine similarity between two vectors"""
     vec1 = np.array(vec1)
     vec2 = np.array(vec2)
@@ -125,17 +158,31 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
         return f"Could not generate summary: {str(e)}"
 
 
-def extract_candidate_name(resume_text: str) -> str:
-    """Try to extract candidate name from resume text"""
-    lines = resume_text.split('\n')[:5]  # Check first 5 lines
+def extract_candidate_name(resume_text: str, filename: str) -> str:
+    """Try to extract candidate name from resume text or filename"""
+    lines = resume_text.split('\n')[:10]  # Check first 10 lines
 
+    # Look for name patterns in the text
     for line in lines:
         line = line.strip()
-        # Simple heuristic: look for lines that might be names
-        if len(line.split()) == 2 and line.replace(' ', '').isalpha():
-            return line
+        # Look for lines that might be names (2-3 words, alphabetic)
+        words = line.split()
+        if 2 <= len(words) <= 3 and all(word.replace('-', '').replace("'", '').isalpha() for word in words):
+            # Additional checks to avoid headers like "WORK EXPERIENCE"
+            if not any(keyword in line.upper() for keyword in
+                       ['EXPERIENCE', 'EDUCATION', 'SKILLS', 'RESUME', 'CV', 'PROFILE']):
+                return line
 
-    return "Unknown Candidate"
+    # Fallback: try to extract from filename
+    base_name = filename.replace('.pdf', '').replace('.docx', '').replace('.txt', '')
+    # Clean up common patterns
+    base_name = base_name.replace('Resume_', '').replace('_Resume', '').replace('CV_', '').replace('_CV', '')
+    base_name = base_name.replace('_', ' ').replace('-', ' ')
+
+    if base_name and not base_name.lower().startswith('untitled'):
+        return base_name
+
+    return f"Candidate {filename[:8]}"  # Use first 8 chars of filename as ID
 
 
 # Streamlit App
@@ -212,7 +259,7 @@ def main():
                 similarity = calculate_cosine_similarity(job_embedding, resume_embedding)
 
                 # Extract candidate name
-                candidate_name = extract_candidate_name(resume_text)
+                candidate_name = extract_candidate_name(resume_text, file.name)
 
                 candidates.append({
                     'name': candidate_name,
@@ -234,16 +281,27 @@ def main():
             st.error("Could not process any resumes successfully")
             return
 
+        # Calculate normalized scores for better presentation
+        raw_scores = [c['similarity'] for c in top_candidates]
+        normalized_scores = normalize_similarity_score(raw_scores)
+
+        # Add normalized scores to candidates
+        for i, candidate in enumerate(top_candidates):
+            candidate['normalized_score'] = normalized_scores[i]
+
         # Display results
         st.header("🏆 Top Candidate Matches")
 
         for i, candidate in enumerate(top_candidates, 1):
-            with st.expander(f"#{i} - {candidate['name']} (Score: {candidate['similarity']:.3f})", expanded=i <= 3):
-                col1, col2 = st.columns([2, 1])
+            match_quality = get_match_quality(candidate['similarity'], candidate['normalized_score'])
+
+            with st.expander(f"#{i} - {candidate['name']} - {match_quality}", expanded=i <= 3):
+                col1, col2, col3 = st.columns([2, 1, 1])
 
                 with col1:
                     st.markdown(f"**File:** {candidate['filename']}")
-                    st.markdown(f"**Similarity Score:** {candidate['similarity']:.3f}")
+                    st.markdown(f"**Raw Similarity:** {candidate['similarity']:.3f}")
+                    st.markdown(f"**Normalized Score:** {candidate['normalized_score']:.3f}")
 
                     if show_summaries:
                         with st.spinner("Generating AI summary..."):
@@ -255,9 +313,14 @@ def main():
                             st.markdown(f"**Why this candidate fits:** {summary}")
 
                 with col2:
-                    # Similarity score visualization
-                    score_percentage = candidate['similarity'] * 100
-                    st.metric("Match %", f"{score_percentage:.1f}%")
+                    # Raw similarity score
+                    raw_percentage = candidate['similarity'] * 100
+                    st.metric("Raw Match %", f"{raw_percentage:.1f}%")
+
+                with col3:
+                    # Normalized score visualization
+                    norm_percentage = candidate['normalized_score'] * 100
+                    st.metric("Adjusted Match %", f"{norm_percentage:.1f}%")
 
         # Summary statistics
         st.header("📊 Summary")
