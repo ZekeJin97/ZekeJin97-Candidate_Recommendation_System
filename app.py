@@ -195,35 +195,37 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
     """Generate AI summary of why candidate is a good fit"""
 
     prompt = f"""
-    You are a hiring manager reviewing a candidate. Focus ONLY on work experience and projects.
+    You are a hiring manager reviewing a candidate. Read their COMPLETE resume carefully from start to finish.
 
     STRICT RULES:
+    - READ THE ENTIRE RESUME - scan all sections including technical skills, projects, and experience
     - DO NOT mention degrees, universities, education, or academic background
     - DO NOT start with "Strong match:" or "Weak match:" - just give direct assessment
-    - Focus ONLY on work experience, projects, and technical skills
-    - For strong candidates: Mention specific work projects that align
-    - For weaker candidates: Mention what they DO have, then add "However, lacks..." for gaps
-    - Keep response concise: 35-50 words maximum
-    - Skip all educational details completely
+    - If they explicitly list LangChain, OpenAI API, RAG, etc. in skills/projects, they HAVE that experience
+    - Focus on work experience, projects, and technical skills listed
+    - For strong candidates: Mention specific projects that align with requirements
+    - For weaker candidates: Mention what they DO have, then add "However, lacks..." for actual gaps
+    - Keep response concise: 40-55 words maximum
+    - Be accurate - don't claim they lack something that's clearly listed
 
     JOB REQUIREMENTS:
     {job_description}
 
-    CANDIDATE RESUME:
+    COMPLETE CANDIDATE RESUME (read all sections):
     {resume_text}
 
-    DIRECT ASSESSMENT (no "strong/weak match" labels):"""
+    ACCURATE ASSESSMENT (based on full resume content):"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
-                 "content": "You are a hiring manager who NEVER mentions education, degrees, or universities. Give direct assessments without 'strong match' or 'weak match' labels. Be concise and focus on work experience."},
+                 "content": "You are a thorough hiring manager who reads COMPLETE resumes carefully. Never claim a candidate lacks skills that are explicitly listed in their technical skills or project descriptions. Be accurate and comprehensive in your review."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=100,
-            temperature=0.2
+            max_tokens=120,  # Increased slightly for more thorough responses
+            temperature=0.1  # Lower for more consistent accuracy
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
