@@ -194,14 +194,14 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
     """Generate AI summary of why candidate is a good fit"""
 
     prompt = f"""
-    You are a hiring manager reviewing a candidate. Analyze their experience and explain WHY they fit this role.
+    You are a hiring manager reviewing a candidate. Analyze their experience objectively.
 
     INSTRUCTIONS:
-    - Mention 1-2 SPECIFIC projects or achievements that align with job requirements
-    - Explain HOW their experience translates to this role
-    - Be honest about gaps if similarity is low
-    - Focus on relevance, not just technology lists
-    - Keep under 40 words
+    - For strong matches: Mention 1-2 specific projects/achievements that align with requirements
+    - For weak matches: Acknowledge relevant skills BUT mention key gaps or limitations
+    - Start with strengths, then mention "however" or "but lacks" for significant gaps
+    - Don't assume they fit - be honest about mismatches
+    - Keep between 60-80 words for detailed assessment
 
     JOB REQUIREMENTS:
     {job_description}
@@ -209,17 +209,17 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
     CANDIDATE RESUME:
     {resume_text}
 
-    EXPLAIN THE FIT (focus on projects/impact, not just tech lists):"""
+    CANDIDATE ASSESSMENT:"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
-                 "content": "You are a hiring manager who focuses on relevant experience and project impact, not just technology lists. Explain WHY someone fits based on what they've actually built or accomplished."},
+                 "content": "You are an honest hiring manager. For strong candidates, highlight relevant experience. For weaker candidates, acknowledge skills but clearly mention gaps using 'however' or 'but lacks'."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=120,
+            max_tokens=200,  # Increased for longer responses
             temperature=0.2
         )
         return response.choices[0].message.content.strip()
@@ -261,7 +261,7 @@ def main():
 
     # Sidebar for configuration
     st.sidebar.header("Configuration")
-    num_candidates = st.sidebar.slider("Number of top candidates to show", 3, 15, 10)
+    num_candidates = st.sidebar.slider("Number of top candidates to show", 5, 10, 10)
     show_summaries = st.sidebar.checkbox("Generate AI summaries", value=True)
 
     # Main interface
@@ -364,7 +364,7 @@ def main():
         for i, candidate in enumerate(top_candidates, 1):
             match_quality = get_match_quality(candidate['similarity'], candidate['normalized_score'])
 
-            with st.expander(f"#{i} - {candidate['name']} - {match_quality}", expanded=i <= 3):
+            with st.expander(f"#{i} - {candidate['name']} - {match_quality}", expanded=i <= 5):
                 col1, col2, col3 = st.columns([2, 1, 1])
 
                 with col1:
@@ -379,7 +379,7 @@ def main():
                                 candidate['resume_text'],
                                 candidate['similarity']
                             )
-                            st.markdown(f"**Why this candidate fits:** {summary}")
+                            st.markdown(f"**Assessment:** {summary}")
 
                 with col2:
                     # Raw similarity score
