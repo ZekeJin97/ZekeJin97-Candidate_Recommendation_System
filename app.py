@@ -30,7 +30,7 @@ st.set_page_config(
 # Initialize OpenAI client
 @st.cache_resource
 def get_openai_client():
-    # For demo purposes - in production, use environment variables
+    # Using Streamlit's secret management
     api_key = st.secrets.get("OPENAI_API_KEY", "your-api-key-here")
     return openai.OpenAI(api_key=api_key)
 
@@ -195,34 +195,34 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
     """Generate AI summary of why candidate is a good fit"""
 
     prompt = f"""
-    You are a hiring manager reviewing a candidate. Read their resume VERY CAREFULLY.
+    You are a hiring manager reviewing a candidate. Focus ONLY on work experience and projects.
 
-    CRITICAL RULES:
-    1. ONLY mention what is explicitly written in their resume
-    2. If they list "LangChain" in skills, they HAVE LangChain experience  
-    3. If they list "OpenAI API" in skills, they HAVE OpenAI experience
-    4. Do NOT contradict what's written in their resume
-    5. Focus on actual projects and achievements mentioned
-    6. For gaps, only mention what's truly missing from the resume
+    STRICT RULES:
+    - DO NOT mention degrees, universities, education, or academic background
+    - Focus ONLY on work experience, projects, and technical skills
+    - For strong matches: Mention 1-2 specific work projects that align
+    - For weak matches: Acknowledge relevant skills BUT mention key gaps
+    - Keep response concise: 35-50 words maximum
+    - Skip all educational details completely
 
     JOB REQUIREMENTS:
     {job_description}
 
-    CANDIDATE'S RESUME (read every word carefully):
+    CANDIDATE RESUME:
     {resume_text}
 
-    ACCURATE ASSESSMENT (based only on what's actually written):"""
+    WORK-FOCUSED ASSESSMENT (no education mentioned):"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
-                 "content": "You are a precise hiring manager who reads resumes word-for-word. Never contradict what's explicitly listed in the candidate's skills or experience. If LangChain is listed, they have LangChain experience. Be factually accurate."},
+                 "content": "You are a hiring manager who NEVER mentions education, degrees, or universities. Focus only on work experience, projects, and technical skills. Be concise."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=200,
-            temperature=0.0  # Zero temperature for maximum consistency
+            max_tokens=100,  # Reduced from 200
+            temperature=0.2  # Changed from 0.0
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -368,6 +368,16 @@ def main():
         # Display results
         st.header("🏆 Top Candidate Matches")
 
+        # Pre-generate all summaries if enabled to avoid state issues
+        if show_summaries:
+            with st.spinner("Generating AI summaries..."):
+                for candidate in top_candidates:
+                    candidate['summary'] = generate_candidate_summary(
+                        job_description,
+                        candidate['resume_text'],
+                        candidate['similarity']
+                    )
+
         for i, candidate in enumerate(top_candidates, 1):
             match_quality = get_match_quality(candidate['similarity'], candidate['normalized_score'])
 
@@ -379,14 +389,8 @@ def main():
                     st.markdown(f"**Raw Similarity:** {candidate['similarity']:.3f}")
                     st.markdown(f"**Normalized Score:** {candidate['normalized_score']:.3f}")
 
-                    if show_summaries:
-                        with st.spinner("Generating AI summary..."):
-                            summary = generate_candidate_summary(
-                                job_description,
-                                candidate['resume_text'],
-                                candidate['similarity']
-                            )
-                            st.markdown(f"**Assessment:** {summary}")
+                    if show_summaries and 'summary' in candidate:
+                        st.markdown(f"**Assessment:** {candidate['summary']}")
 
                 with col2:
                     # Raw similarity score
@@ -411,14 +415,10 @@ def main():
             if top_candidates:
                 export_data = []
                 for i, candidate in enumerate(top_candidates, 1):
-                    # Get summary if enabled (but don't regenerate if already exists)
+                    # Use pre-generated summary if available
                     summary = "N/A"
-                    if show_summaries:
-                        summary = generate_candidate_summary(
-                            job_description,
-                            candidate['resume_text'],
-                            candidate['similarity']
-                        ).replace('\n', ' ')  # Remove line breaks for CSV
+                    if show_summaries and 'summary' in candidate:
+                        summary = candidate['summary'].replace('\n', ' ')  # Remove line breaks for CSV
 
                     export_data.append({
                         'Rank': i,
@@ -437,8 +437,7 @@ def main():
                     data=csv,
                     file_name=f"candidate_matches_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime='text/csv',
-                    help="Download candidate matching results as CSV file",
-                    key="download_csv"  # Add key to prevent state issues
+                    help="Download candidate matching results as CSV file"
                 )
 
 
