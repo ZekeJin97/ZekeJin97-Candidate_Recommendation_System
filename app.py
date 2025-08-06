@@ -195,37 +195,33 @@ def generate_candidate_summary(job_description: str, resume_text: str, similarit
     """Generate AI summary of why candidate is a good fit"""
 
     prompt = f"""
-    You are a hiring manager reviewing a candidate. Read their COMPLETE resume carefully from start to finish.
+    You are a hiring manager reviewing a candidate's resume. Read it carefully and give an honest assessment.
 
-    STRICT RULES:
-    - READ THE ENTIRE RESUME - scan all sections including technical skills, projects, and experience
-    - DO NOT mention degrees, universities, education, or academic background
-    - DO NOT start with "Strong match:" or "Weak match:" - just give direct assessment
-    - If they explicitly list LangChain, OpenAI API, RAG, etc. in skills/projects, they HAVE that experience
-    - Focus on work experience, projects, and technical skills listed
-    - For strong candidates: Mention specific projects that align with requirements
-    - For weaker candidates: Mention what they DO have, then add "However, lacks..." for actual gaps
-    - Keep response concise: 40-55 words maximum
-    - Be accurate - don't claim they lack something that's clearly listed
+    Rules:
+    - Don't mention education/degrees
+    - Focus on work experience and projects
+    - Only mention skills/technologies that are actually in the resume
+    - If you see specific technologies mentioned (like GPT, LangChain, etc.), acknowledge them
+    - Be concise: 40-50 words
 
-    JOB REQUIREMENTS:
+    Job Requirements:
     {job_description}
 
-    COMPLETE CANDIDATE RESUME (read all sections):
+    Candidate Resume:
     {resume_text}
 
-    ACCURATE ASSESSMENT (based on full resume content):"""
+    Assessment:"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
-                 "content": "You are a thorough hiring manager who reads COMPLETE resumes carefully. Never claim a candidate lacks skills that are explicitly listed in their technical skills or project descriptions. Be accurate and comprehensive in your review."},
+                 "content": "You are a careful hiring manager who only mentions skills that are clearly stated in the resume. Read thoroughly and be accurate."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=120,  # Increased slightly for more thorough responses
-            temperature=0.1  # Lower for more consistent accuracy
+            max_tokens=100,
+            temperature=0.1
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
