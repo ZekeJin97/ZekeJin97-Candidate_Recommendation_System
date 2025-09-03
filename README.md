@@ -2,10 +2,19 @@
 
 A Streamlit web application that matches candidates to job descriptions using AI embeddings and cosine similarity.
 
-
 ## 🚀 Live Demo
 
 **[Try the app here: https://zekejin97-candidaterecommendationsystem-sprouts.streamlit.app/](https://zekejin97-candidaterecommendationsystem-sprouts.streamlit.app/)**
+
+## 📸 Screenshots
+
+### Input Interface
+![Job Description and Resume Upload Interface](demo_screenshots/candidate_demo_1.png)
+*Clean interface for entering job requirements and uploading candidate resumes*
+
+### Ranked Results
+![Candidate Ranking Results](demo_screenshots/candidate_demo3.png)
+*AI-powered candidate ranking with cosine similarity scores and detailed assessments*
 
 ## ✨ Features
 
