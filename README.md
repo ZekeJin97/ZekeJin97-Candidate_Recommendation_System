@@ -9,11 +9,11 @@ A Streamlit web application that matches candidates to job descriptions using AI
 ## 📸 Screenshots
 
 ### Input Interface
-![Job Description and Resume Upload Interface](demo_screenshots/candidate_demo_1.png)
+![Job Description and Resume Upload Interface](candidate_demo_1.png)
 *Clean interface for entering job requirements and uploading candidate resumes*
 
 ### Ranked Results
-![Candidate Ranking Results](demo_screenshots/candidate_demo3.png)
+![Candidate Ranking Results](candidate_demo3.png)
 *AI-powered candidate ranking with cosine similarity scores and detailed assessments*
 
 ## ✨ Features
