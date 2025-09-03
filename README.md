@@ -42,14 +42,12 @@ A Streamlit web application that matches candidates to job descriptions using AI
 - **Accuracy**: Only mentions skills explicitly found in resumes
 
 ### Input Interface
-![Job Description and Resume Upload Interface](candidate_demo_1.png)
+<img src="candidate_demo_1.png" alt="Job Description and Resume Upload Interface" width="900">
+
 *Clean interface for entering job requirements and uploading candidate resumes*
 
-
-
 ### Ranked Results
-![Candidate Ranking Results](candidate_demo3.png)
-*AI-powered candidate ranking with cosine similarity scores and detailed assessments*
+<img src="candidate_demo3.png" alt="Candidate Ranking Results" width="900">
 
 ## 📦 Installation
 
