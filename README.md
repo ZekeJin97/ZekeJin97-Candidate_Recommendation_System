@@ -6,16 +6,6 @@ A Streamlit web application that matches candidates to job descriptions using AI
 
 **[Try the app here: https://zekejin97-candidaterecommendationsystem-sprouts.streamlit.app/](https://zekejin97-candidaterecommendationsystem-sprouts.streamlit.app/)**
 
-## 📸 Screenshots
-
-### Input Interface
-![Job Description and Resume Upload Interface](candidate_demo_1.png)
-*Clean interface for entering job requirements and uploading candidate resumes*
-
-### Ranked Results
-![Candidate Ranking Results](candidate_demo3.png)
-*AI-powered candidate ranking with cosine similarity scores and detailed assessments*
-
 ## ✨ Features
 
 - **Job Description Input**: Enter job requirements via text area
@@ -50,6 +40,16 @@ A Streamlit web application that matches candidates to job descriptions using AI
 - **Choice Rationale**: Cost-effective for text generation, good reasoning capabilities for candidate assessment
 - **Focus**: Work experience, skills, and project relevance
 - **Accuracy**: Only mentions skills explicitly found in resumes
+
+### Input Interface
+![Job Description and Resume Upload Interface](candidate_demo_1.png)
+*Clean interface for entering job requirements and uploading candidate resumes*
+
+
+
+### Ranked Results
+![Candidate Ranking Results](candidate_demo3.png)
+*AI-powered candidate ranking with cosine similarity scores and detailed assessments*
 
 ## 📦 Installation
 
