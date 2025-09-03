@@ -2,7 +2,6 @@
 
 A Streamlit web application that matches candidates to job descriptions using AI embeddings and cosine similarity.
 
-**Built for SproutsAI ML Engineer Internship Assignment**
 
 ## 🚀 Live Demo
 
